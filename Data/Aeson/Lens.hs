@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts, OverloadedStrings, ViewPatterns #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Data.Aeson.Lens (
   ValueIx(..),
@@ -6,12 +8,12 @@ module Data.Aeson.Lens (
   arr, obj,
   ) where
 
-import Data.Aeson
-import Control.Lens
-import Control.Applicative
-import qualified Data.Text as T
+import           Control.Applicative
+import           Control.Lens
+import           Data.Aeson
 import qualified Data.HashMap.Strict as HMS
-import qualified Data.Vector as V
+import qualified Data.Text           as T
+import qualified Data.Vector         as V
 
 -- $setup
 -- >>> import Data.Maybe
