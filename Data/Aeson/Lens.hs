@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts, OverloadedStrings, ViewPatterns #-}
 
 module Data.Aeson.Lens (
   ValueIx(..),
@@ -22,36 +22,49 @@ import qualified Data.Vector as V
 data ValueIx = ArrIx Int | ObjIx T.Text
 
 -- | Lens of Value
-valueAt :: ValueIx -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe Value)
-valueAt k = index $ \f v -> (go k v) <$> f k (lu k v) where
-  go (ObjIx ix) (Just (Object o)) Nothing = Just $ Object $ HMS.delete ix o
-  go (ObjIx ix) (Just (Object o)) (Just v) = Just $ Object $ HMS.insert ix v o
-  go (ArrIx ix) (Just (Array a)) Nothing = Just $ Array $ a V.// [(ix, Null)]
-  go (ArrIx ix) (Just (Array a)) (Just v) = Just $ Array $ a V.// [(ix, v)]
+valueAt :: (ToJSON v, FromJSON v)
+           => ValueIx
+           -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
+valueAt k = index $ \f (fmap toJSON -> v) -> (go k v) <$> f k (lu k v) where
+  go (ObjIx ix) (Just (Object o)) Nothing  = Just $ Object $ HMS.delete ix o
+  go (ObjIx ix) (Just (Object o)) (Just v) = Just $ Object $ HMS.insert ix (toJSON v) o
+  go (ArrIx ix) (Just (Array  a)) Nothing  = Just $ Array $ a V.// [(ix, Null)]
+  go (ArrIx ix) (Just (Array  a)) (Just v) = Just $ Array $ a V.// [(ix, toJSON v)]
   go _ v _ = v
 
-  lu (ObjIx ix) (Just (Object o)) = HMS.lookup ix o
-  lu (ArrIx ix) (Just (Array a)) | ix >= 0 && ix < V.length a = Just $ a V.! ix
+  lu (ObjIx ix) (Just (Object o)) = fromJSONMaybe =<< HMS.lookup ix o
+  lu (ArrIx ix) (Just (Array a)) | ix >= 0 && ix < V.length a = fromJSONMaybe $ a V.! ix
   lu _ _ = Nothing
+
+fromJSONMaybe :: FromJSON a => Value -> Maybe a
+fromJSONMaybe v = case fromJSON v of
+  Error   _ -> Nothing
+  Success a -> Just a
 
 -- | Lens of Array
 --
--- >>> v ^. obj (T.pack "bar") . arr 1
--- Just (Bool False)
--- >>> v ^. obj (T.pack "bar") . arr 3
+-- >>> v ^. obj (T.pack "bar") . arr 1 :: Maybe Bool
+-- Just False
+-- >>> v ^. obj (T.pack "bar") . arr 3 :: Maybe Value
 -- Nothing
--- >>> v ^. arr 0
+-- >>> v ^. arr 0 :: Maybe Value
 -- Nothing
-arr :: Int -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe Value)
+arr :: (ToJSON v, FromJSON v)
+       => Int
+       -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
 arr = valueAt . ArrIx
 
 -- | Lens of Object
 --
--- >>> v ^. obj (T.pack "foo") . obj (T.pack "baz")
--- Just (Number 3.14)
--- >>> v ^. obj (T.pack "foo") . obj (T.pack "hoge")
+-- >>> v ^. obj (T.pack "foo") . obj (T.pack "baz") :: Maybe Double
+-- Just 3.14
+-- >>> v ^. obj (T.pack "foo") . obj (T.pack "baz") :: Maybe Object
 -- Nothing
--- >>> v ^. obj (T.pack "hoge")
+-- >>> v ^. obj (T.pack "foo") . obj (T.pack "hoge") :: Maybe Value
 -- Nothing
-obj :: T.Text -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe Value)
+-- >>> v ^. obj (T.pack "hoge") :: Maybe Value
+-- Nothing
+obj :: (ToJSON v, FromJSON v)
+       => T.Text
+       -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
 obj = valueAt . ObjIx
