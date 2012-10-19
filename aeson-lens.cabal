@@ -1,5 +1,5 @@
 name:                aeson-lens
-version:             0.1.0.1
+version:             0.1.0.2
 synopsis:            Lens of Aeson
 description:         Lens of Aeson
 license:             BSD3
