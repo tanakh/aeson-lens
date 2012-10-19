@@ -1,3 +1,7 @@
-*~
+dist
+cabal-dev
 *.o
-dist/
+*.hi
+*.chi
+*.chs.h
+
