@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Data.Aeson.Lens (
   ValueIx(..),
