@@ -21,6 +21,7 @@ import qualified Data.Vector as V
 
 data ValueIx = ArrIx Int | ObjIx T.Text
 
+-- | Lens of Value
 valueAt :: ValueIx -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe Value)
 valueAt k = index $ \f v -> (go k v) <$> f k (lu k v) where
   go (ObjIx ix) (Just (Object o)) Nothing = Just $ Object $ HMS.delete ix o
@@ -35,6 +36,12 @@ valueAt k = index $ \f v -> (go k v) <$> f k (lu k v) where
 
 -- | Lens of Array
 --
+-- >>> v ^. obj (T.pack "bar") . arr 1
+-- Just (Bool False)
+-- >>> v ^. obj (T.pack "bar") . arr 3
+-- Nothing
+-- >>> v ^. arr 0
+-- Nothing
 arr :: Int -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe Value)
 arr = valueAt . ArrIx
 
@@ -42,5 +49,9 @@ arr = valueAt . ArrIx
 --
 -- >>> v ^. obj (T.pack "foo") . obj (T.pack "baz")
 -- Just (Number 3.14)
+-- >>> v ^. obj (T.pack "foo") . obj (T.pack "hoge")
+-- Nothing
+-- >>> v ^. obj (T.pack "hoge")
+-- Nothing
 obj :: T.Text -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe Value)
 obj = valueAt . ObjIx
