@@ -1,18 +1,24 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns      #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Data.Aeson.Lens (
-  ValueIx(..),
-  valueAt,
-  arr, obj,
+  -- * Lenses
+  nth,
+  key,
+
+  -- * Traversals
+  traverseArray,
+  traverseObject,
   ) where
 
 import           Control.Applicative
 import           Control.Lens
 import           Data.Aeson
 import qualified Data.HashMap.Strict as HMS
+import           Data.List.Lens
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text           as T
@@ -22,7 +28,6 @@ import qualified Data.Vector         as V
 -- >>> import Data.Maybe
 -- >>> import qualified Data.ByteString.Lazy.Char8 as L
 -- >>> import Data.Text ()
--- >>> let v = decode (L.pack "{\"foo\": {\"baz\": 3.14}, \"bar\": [123, false, null]}") :: Maybe Value
 
 data ValueIx = ArrIx Int | ObjIx T.Text
 
@@ -30,7 +35,7 @@ data ValueIx = ArrIx Int | ObjIx T.Text
 valueAt :: (ToJSON v, FromJSON v)
            => ValueIx
            -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
-valueAt k = index $ \f (fmap toJSON -> v) -> (go k v) <$> f k (lu k v) where
+valueAt k = index $ \f (fmap toJSON -> v) -> go k v <$> f k (lu k v) where
   go (ObjIx ix) (Just (Object o)) Nothing  = Just $ Object $ HMS.delete ix o
   go (ObjIx ix) (Just (Object o)) (Just v) = Just $ Object $ HMS.insert ix (toJSON v) o
   go (ObjIx ix) _                 (Just v) = Just $ Object $ HMS.fromList [(ix, toJSON v)]
@@ -42,6 +47,7 @@ valueAt k = index $ \f (fmap toJSON -> v) -> (go k v) <$> f k (lu k v) where
   lu (ObjIx ix) (Just (Object o)) = fromJSONMaybe =<< HMS.lookup ix o
   lu (ArrIx ix) (Just (Array a)) | ix >= 0 && ix < V.length a = fromJSONMaybe $ a V.! ix
   lu _ _ = Nothing
+{-# INLINE valueAt #-}
 
 updateV :: Int -> Value -> V.Vector Value -> V.Vector Value
 updateV i v a
@@ -49,6 +55,7 @@ updateV i v a
     updateV i v $ V.generate (i + 1) $ \ii -> fromMaybe Null $ a `V.indexM` ii
   | otherwise =
     a V.// [(i, v)]
+{-# INLINE updateV #-}
 
 fromJSONMaybe :: FromJSON a => Value -> Maybe a
 fromJSONMaybe v = case fromJSON v of
@@ -57,47 +64,81 @@ fromJSONMaybe v = case fromJSON v of
 
 -- | Lens of Array
 --
--- >>> L.unpack $ encode v
--- "{\"bar\":[123,false,null],\"foo\":{\"baz\":3.14}}"
--- >>> v ^. obj (T.pack "bar") . arr 1 :: Maybe Bool
+-- >>> let v = decode (L.pack "{\"foo\": {\"baz\": 3.14}, \"bar\": [123, false, null]}") :: Maybe Value
+-- >>> v ^. key (T.pack "bar") . nth 1 :: Maybe Bool
 -- Just False
--- >>> v ^. obj (T.pack "bar") . arr 1 :: Maybe String
+-- >>> v ^. key (T.pack "bar") . nth 1 :: Maybe String
 -- Nothing
--- >>> v ^. obj (T.pack "bar") . arr 3 :: Maybe Value
+-- >>> v ^. key (T.pack "bar") . nth 3 :: Maybe Value
 -- Nothing
--- >>> v ^. arr 0 :: Maybe Value
+-- >>> v ^. nth 0 :: Maybe Value
 -- Nothing
--- >>> let x = arr 0 .~ Just 1 $ Nothing
+-- >>> let x = nth 0 .~ Just 1 $ Nothing
 -- >>> L.unpack $ encode x
 -- "[1]"
--- >>> let y = arr 1 .~ Just "hoge" $ x
+-- >>> let y = nth 1 .~ Just "hoge" $ x
 -- >>> L.unpack $ encode y
 -- "[1,\"hoge\"]"
--- >>> let z = arr 0 .~ Just False $ y
+-- >>> let z = nth 0 .~ Just False $ y
 -- >>> L.unpack $ encode z
 -- "[false,\"hoge\"]"
-arr :: (ToJSON v, FromJSON v)
+nth :: (ToJSON v, FromJSON v)
        => Int
        -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
-arr = valueAt . ArrIx
+nth = valueAt . ArrIx
+{-# INLINE nth #-}
 
 -- | Lens of Object
 --
--- >>> v ^. obj (T.pack "foo") . obj (T.pack "baz") :: Maybe Double
+-- >>> let v = decode (L.pack "{\"foo\": {\"baz\": 3.14}, \"bar\": [123, false, null]}") :: Maybe Value
+-- >>> v ^. key (T.pack "foo") . key (T.pack "baz") :: Maybe Double
 -- Just 3.14
--- >>> v ^. obj (T.pack "foo") . obj (T.pack "baz") :: Maybe Object
+-- >>> v ^. key (T.pack "foo") . key (T.pack "baz") :: Maybe Object
 -- Nothing
--- >>> v ^. obj (T.pack "foo") . obj (T.pack "hoge") :: Maybe Value
+-- >>> v ^. key (T.pack "foo") . key (T.pack "hoge") :: Maybe Value
 -- Nothing
--- >>> v ^. obj (T.pack "hoge") :: Maybe Value
+-- >>> v ^. key (T.pack "hoge") :: Maybe Value
 -- Nothing
--- >>> let w = obj (T.pack "a") .~ Just 2.23 $ Nothing
+-- >>> let w = key (T.pack "a") .~ Just 2.23 $ Nothing
 -- >>> L.unpack $ encode w
 -- "{\"a\":2.23}"
--- >>> let x = obj (T.pack "b") . obj (T.pack "c") .~ Just True $ w
+-- >>> let x = key (T.pack "b") . key (T.pack "c") .~ Just True $ w
 -- >>> L.unpack $ encode x
 -- "{\"b\":{\"c\":true},\"a\":2.23}"
-obj :: (ToJSON v, FromJSON v)
+key :: (ToJSON v, FromJSON v)
        => T.Text
        -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
-obj = valueAt . ObjIx
+key = valueAt . ObjIx
+{-# INLINE key #-}
+
+-- | Indexed traversal of Array
+--
+-- >>> let v = decode (L.pack "[1, true, null]") :: Maybe Value
+-- >>> catMaybes . toListOf traverseArray $ v
+-- [Number 1,Bool True,Null]
+-- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
+-- >>> catMaybes . toListOf (traverseArray . key (T.pack "name")) $ w :: [T.Text]
+-- ["tanakh","nushio"]
+traverseArray :: SimpleIndexedTraversal Int (Maybe Value) (Maybe Value)
+traverseArray = index $ \f m -> case m of
+  Just (Array (map Just . V.toList -> v)) ->
+    Just . Array . V.fromList . catMaybes <$> withIndex traverseList f v
+  v -> pure v
+{-# INLINE traverseArray #-}
+
+-- | Indexed traversal of Object
+traverseObject :: SimpleIndexedTraversal T.Text (Maybe Value) (Maybe Value)
+traverseObject = index $ \f m -> case m of
+  Just (Object (expand . HMS.toList -> v)) ->
+    Just . Object . HMS.fromList . catMaybes . collapse <$> withIndex traverseAssocList f v
+  v -> pure v
+  where
+  expand = map (_2 %~ Just)
+  collapse = map (\(a, b) -> (a, ) <$> b)
+{-# INLINE traverseObject #-}
+
+traverseAssocList :: SimpleIndexedTraversal k [(k, v)] v
+traverseAssocList = index $ \f m -> go f m where
+  go _ [] = pure []
+  go f ((k, v): xs) = (\v' ys -> (k, v') : ys) <$> f k v <*> go f xs
+{-# INLINE traverseAssocList #-}
