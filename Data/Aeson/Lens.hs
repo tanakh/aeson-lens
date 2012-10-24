@@ -128,6 +128,10 @@ traverseArray = index $ \f m -> case m of
 {-# INLINE traverseArray #-}
 
 -- | Indexed traversal of Object
+--
+-- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
+-- >>> catMaybes . toListOf (traverseArray . traverseObject) $ w :: [Value]
+-- ["tanakh","nushio"]
 traverseObject :: SimpleIndexedTraversal T.Text (Maybe Value) (Maybe Value)
 traverseObject = index $ \f m -> case m of
   Just (Object (expand . HMS.toList -> v)) ->
