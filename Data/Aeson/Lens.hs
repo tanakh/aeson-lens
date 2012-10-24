@@ -115,15 +115,16 @@ key = valueAt . ObjIx
 -- | Indexed traversal of Array
 --
 -- >>> let v = decode (L.pack "[1, true, null]") :: Maybe Value
--- >>> catMaybes . toListOf traverseArray $ v
+-- >>> catMaybes . toListOf traverseArray $ v :: [Value]
 -- [Number 1,Bool True,Null]
 -- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
 -- >>> catMaybes . toListOf (traverseArray . key (T.pack "name")) $ w :: [T.Text]
 -- ["tanakh","nushio"]
-traverseArray :: SimpleIndexedTraversal Int (Maybe Value) (Maybe Value)
+traverseArray :: (ToJSON v, FromJSON v)
+                 => SimpleIndexedTraversal Int (Maybe Value) (Maybe v)
 traverseArray = index $ \f m -> case m of
-  Just (Array (map Just . V.toList -> v)) ->
-    Just . Array . V.fromList . catMaybes <$> withIndex traverseList f v
+  Just (Array (map fromJSONMaybe . V.toList -> v)) ->
+    Just . Array . V.fromList . map toJSON . catMaybes <$> withIndex traverseList f v
   v -> pure v
 {-# INLINE traverseArray #-}
 
@@ -132,14 +133,15 @@ traverseArray = index $ \f m -> case m of
 -- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
 -- >>> catMaybes . toListOf (traverseArray . traverseObject) $ w :: [Value]
 -- [String "tanakh",Number 29,String "nushio",Number 28]
-traverseObject :: SimpleIndexedTraversal T.Text (Maybe Value) (Maybe Value)
+traverseObject :: (ToJSON v, FromJSON v)
+                  => SimpleIndexedTraversal T.Text (Maybe Value) (Maybe v)
 traverseObject = index $ \f m -> case m of
   Just (Object (expand . HMS.toList -> v)) ->
     Just . Object . HMS.fromList . catMaybes . collapse <$> withIndex traverseAssocList f v
   v -> pure v
   where
-  expand = map (_2 %~ Just)
-  collapse = map (\(a, b) -> (a, ) <$> b)
+  expand = map (_2 %~ fromJSONMaybe)
+  collapse = map (\(a, b) -> (a, ) . toJSON <$> b)
 {-# INLINE traverseObject #-}
 
 traverseAssocList :: SimpleIndexedTraversal k [(k, v)] v
