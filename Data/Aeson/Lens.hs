@@ -61,6 +61,7 @@ fromJSONMaybe :: FromJSON a => Value -> Maybe a
 fromJSONMaybe v = case fromJSON v of
   Error   _ -> Nothing
   Success a -> Just a
+{-# INLINE fromJSONMaybe #-}
 
 -- | Lens of Array
 --
