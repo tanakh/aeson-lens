@@ -8,6 +8,9 @@ module Data.Aeson.Lens (
   -- * Lenses
   nth,
   key,
+  asDouble,
+  asText,
+  asBool,
 
   -- * Traversals
   traverseArray,
@@ -149,3 +152,49 @@ traverseAssocList = index $ \f m -> go f m where
   go _ [] = pure []
   go f ((k, v): xs) = (\v' ys -> (k, v') : ys) <$> f k v <*> go f xs
 {-# INLINE traverseAssocList #-}
+
+-- | Lens of Double
+--
+-- >>> let v = decode (L.pack "{\"foo\": {\"baz\": 3.14}, \"bar\": [123, false, null]}") :: Maybe Value
+-- >>> v ^. key (T.pack "foo") . key (T.pack "baz") . asDouble
+-- Just 3.14
+-- >>> v ^. key (T.pack "bar") . asDouble
+-- Nothing
+-- >>> v ^. key (T.pack "hoge") . asDouble
+-- Nothing
+asDouble :: SimpleLens (Maybe Value) (Maybe Double)
+asDouble = as
+{-# INLINE asDouble #-}
+
+-- | Lens of Text
+--
+-- >>> let v = decode (L.pack "{\"foo\": {\"baz\": \"3.14\"}, \"bar\": [123, false, null]}") :: Maybe Value
+-- >>> v ^. key (T.pack "foo") . key (T.pack "baz") . asText
+-- Just "3.14"
+-- >>> v ^. key (T.pack "bar") . asText
+-- Nothing
+-- >>> v ^. key (T.pack "hoge") . asText
+-- Nothing
+asText :: SimpleLens (Maybe Value) (Maybe T.Text)
+asText = as
+{-# INLINE asText #-}
+
+-- | Lens of Bool
+--
+-- >>> let v = decode (L.pack "{\"foo\": {\"baz\": false}, \"bar\": [123, false, null]}") :: Maybe Value
+-- >>> v ^. key (T.pack "foo") . key (T.pack "baz") . asBool
+-- Just False
+-- >>> v ^. key (T.pack "bar") . asBool
+-- Nothing
+-- >>> v ^. key (T.pack "hoge") . asBool
+-- Nothing
+asBool :: SimpleLens (Maybe Value) (Maybe Bool)
+asBool = as
+{-# INLINE asBool #-}
+
+as :: (ToJSON v, FromJSON v)
+      => SimpleLens (Maybe Value) (Maybe v)
+as f x = toJSON <$$> f (fromJSONMaybe =<< x)
+  where
+  (<$$>) = fmap . fmap
+{-# INLINE as #-}
