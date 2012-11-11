@@ -6,15 +6,16 @@
 
 module Data.Aeson.Lens (
   -- * Lenses
-  nth,
-  key,
+  nth, nth',
+  key, key',
+
   asDouble,
   asText,
   asBool,
 
   -- * Traversals
-  traverseArray,
-  traverseObject,
+  traverseArray, traverseArray',
+  traverseObject, traverseObject'
   ) where
 
 import           Control.Applicative
@@ -35,9 +36,9 @@ import qualified Data.Vector         as V
 data ValueIx = ArrIx Int | ObjIx T.Text
 
 -- | Lens of Value
-valueAt :: (ToJSON v, FromJSON v)
+valueAt :: (FromJSON u, ToJSON v)
            => ValueIx
-           -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
+           -> IndexedLens ValueIx (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
 valueAt k = index $ \f (fmap toJSON -> v) -> go k v <$> f k (lu k v) where
   go (ObjIx ix) (Just (Object o)) Nothing  = Just $ Object $ HMS.delete ix o
   go (ObjIx ix) (Just (Object o)) (Just v) = Just $ Object $ HMS.insert ix (toJSON v) o
@@ -86,11 +87,18 @@ fromJSONMaybe v = case fromJSON v of
 -- >>> let z = nth 0 .~ Just False $ y
 -- >>> L.unpack $ encode z
 -- "[false,\"hoge\"]"
-nth :: (ToJSON v, FromJSON v)
+
+nth :: (FromJSON v, ToJSON v)
        => Int
        -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
-nth = valueAt . ArrIx
+nth = nth'
 {-# INLINE nth #-}
+
+nth' :: (FromJSON u, ToJSON v)
+       => Int
+       -> IndexedLens ValueIx (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
+nth' = valueAt . ArrIx
+{-# INLINE nth' #-}
 
 -- | Lens of Object
 --
@@ -109,11 +117,17 @@ nth = valueAt . ArrIx
 -- >>> let x = key (T.pack "b") . key (T.pack "c") .~ Just True $ w
 -- >>> L.unpack $ encode x
 -- "{\"b\":{\"c\":true},\"a\":2.23}"
-key :: (ToJSON v, FromJSON v)
+key :: (FromJSON v, ToJSON v)
        => T.Text
        -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
-key = valueAt . ObjIx
+key = key'
 {-# INLINE key #-}
+
+key' :: (FromJSON u, ToJSON v)
+       => T.Text
+       -> IndexedLens ValueIx (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
+key' = valueAt . ObjIx
+{-# INLINE key' #-}
 
 -- | Indexed traversal of Array
 --
@@ -123,31 +137,43 @@ key = valueAt . ObjIx
 -- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
 -- >>> catMaybes . toListOf (traverseArray . key (T.pack "name")) $ w :: [T.Text]
 -- ["tanakh","nushio"]
-traverseArray :: (ToJSON v, FromJSON v)
+traverseArray :: (FromJSON v, ToJSON v)
                  => SimpleIndexedTraversal Int (Maybe Value) (Maybe v)
-traverseArray = index $ \f m -> case m of
+traverseArray = traverseArray'
+{-# INLINE traverseArray #-}
+
+-- | Type-changing indexed traversal of an Array
+traverseArray' :: (FromJSON u, ToJSON v)
+               => IndexedTraversal Int (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
+traverseArray' = index $ \f m -> case m of
   Just (Array (map fromJSONMaybe . V.toList -> v)) ->
     Just . Array . V.fromList . map toJSON . catMaybes <$> withIndex traverseList f v
   v -> pure v
-{-# INLINE traverseArray #-}
+{-# INLINE traverseArray' #-}
 
 -- | Indexed traversal of Object
 --
 -- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
 -- >>> catMaybes . toListOf (traverseArray . traverseObject) $ w :: [Value]
 -- [String "tanakh",Number 29,String "nushio",Number 28]
-traverseObject :: (ToJSON v, FromJSON v)
+traverseObject :: (FromJSON v, ToJSON v)
                   => SimpleIndexedTraversal T.Text (Maybe Value) (Maybe v)
-traverseObject = index $ \f m -> case m of
+traverseObject = traverseObject'
+{-# INLINE traverseObject #-}
+
+-- | Type-changing indexed traversal of Object
+traverseObject' :: (FromJSON u, ToJSON v)
+                  => IndexedTraversal T.Text (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
+traverseObject' = index $ \f m -> case m of
   Just (Object (expand . HMS.toList -> v)) ->
     Just . Object . HMS.fromList . catMaybes . collapse <$> withIndex traverseAssocList f v
   v -> pure v
   where
   expand = map (_2 %~ fromJSONMaybe)
   collapse = map (\(a, b) -> (a, ) . toJSON <$> b)
-{-# INLINE traverseObject #-}
+{-# INLINE traverseObject' #-}
 
-traverseAssocList :: SimpleIndexedTraversal k [(k, v)] v
+traverseAssocList :: IndexedTraversal k [(k, u)] [(k, v)] u v
 traverseAssocList = index $ \f m -> go f m where
   go _ [] = pure []
   go f ((k, v): xs) = (\v' ys -> (k, v') : ys) <$> f k v <*> go f xs
