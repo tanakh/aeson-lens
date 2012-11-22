@@ -147,7 +147,7 @@ traverseArray' :: (FromJSON u, ToJSON v)
                => IndexedTraversal Int (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
 traverseArray' = index $ \f m -> case m of
   Just (Array (map fromJSONMaybe . V.toList -> v)) ->
-    Just . Array . V.fromList . map toJSON . catMaybes <$> withIndex traverseList f v
+    Just . Array . V.fromList . map toJSON . catMaybes <$> itraverse f v
   v -> pure v
 {-# INLINE traverseArray' #-}
 
