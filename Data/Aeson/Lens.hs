@@ -81,13 +81,13 @@ fromJSONMaybe v = case fromJSON v of
 -- Nothing
 -- >>> v ^. nth 0 :: Maybe Value
 -- Nothing
--- >>> let x = nth 0 .~ Just 1 $ Nothing
+-- >>> let x = Nothing & nth 0 .~ Just 1
 -- >>> L.unpack $ encode x
 -- "[1]"
--- >>> let y = nth 1 .~ Just "hoge" $ x
+-- >>> let y = x & nth 1 .~ Just "hoge"
 -- >>> L.unpack $ encode y
 -- "[1,\"hoge\"]"
--- >>> let z = nth 0 .~ Just False $ y
+-- >>> let z = y & nth 0 .~ Just False
 -- >>> L.unpack $ encode z
 -- "[false,\"hoge\"]"
 --
@@ -120,10 +120,10 @@ nth' = valueAt . ArrIx
 -- Nothing
 -- >>> v ^. key (T.pack "hoge") :: Maybe Value
 -- Nothing
--- >>> let w = key (T.pack "a") .~ Just 2.23 $ Nothing
+-- >>> let w = Nothing & key (T.pack "a") .~ Just 2.23
 -- >>> L.unpack $ encode w
 -- "{\"a\":2.23}"
--- >>> let x = key (T.pack "b") . key (T.pack "c") .~ Just True $ w
+-- >>> let x = w & key (T.pack "b") . key (T.pack "c") .~ Just True
 -- >>> L.unpack $ encode x
 -- "{\"b\":{\"c\":true},\"a\":2.23}"
 key :: (FromJSON v, ToJSON v)
@@ -141,10 +141,10 @@ key' = valueAt . ObjIx
 -- | Indexed traversal of Array
 --
 -- >>> let v = decode (L.pack "[1, true, null]") :: Maybe Value
--- >>> catMaybes . toListOf traverseArray $ v :: [Value]
+-- >>> v & catMaybes . toListOf traverseArray :: [Value]
 -- [Number 1,Bool True,Null]
 -- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
--- >>> catMaybes . toListOf (traverseArray . key (T.pack "name")) $ w :: [T.Text]
+-- >>> w & catMaybes . toListOf (traverseArray . key (T.pack "name")) :: [T.Text]
 -- ["tanakh","nushio"]
 traverseArray :: (FromJSON v, ToJSON v)
                  => SimpleIndexedTraversal Int (Maybe Value) (Maybe v)
@@ -163,7 +163,7 @@ traverseArray' = index $ \f m -> case m of
 -- | Indexed traversal of Object
 --
 -- >>> let w = decode (L.pack "[{\"name\": \"tanakh\", \"age\": 29}, {\"name\": \"nushio\", \"age\": 28}]") :: Maybe Value
--- >>> catMaybes . toListOf (traverseArray . traverseObject) $ w :: [Value]
+-- >>> w & catMaybes . toListOf (traverseArray . traverseObject) :: [Value]
 -- [String "tanakh",Number 29,String "nushio",Number 28]
 traverseObject :: (FromJSON v, ToJSON v)
                   => SimpleIndexedTraversal T.Text (Maybe Value) (Maybe v)
