@@ -15,14 +15,18 @@ module Data.Aeson.Lens (
 
   -- * Traversals
   traverseArray, traverseArray',
-  traverseObject, traverseObject'
+  traverseObject, traverseObject',
+
+  -- * Generic Indexing
+  ValueIx(..),
+  valueAt,
   ) where
 
 import           Control.Applicative
 import           Control.Lens
 import           Data.Aeson
 import qualified Data.HashMap.Strict as HMS
-import           Data.List.Lens
+-- import           Data.List.Lens
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text           as T
