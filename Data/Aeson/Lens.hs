@@ -26,7 +26,6 @@ import           Control.Applicative
 import           Control.Lens
 import           Data.Aeson
 import qualified Data.HashMap.Strict as HMS
--- import           Data.List.Lens
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text           as T
@@ -60,7 +59,7 @@ valueAt k = index $ \f (fmap toJSON -> v) -> go k v <$> f k (lu k v) where
 updateV :: Int -> Value -> V.Vector Value -> V.Vector Value
 updateV i v a
   | i >= V.length a =
-    updateV i v $ V.generate (i + 1) $ \ii -> fromMaybe Null $ a `V.indexM` ii
+    updateV i v $ V.generate (i + 1) $ \ii -> fromMaybe Null $ a V.!? ii
   | otherwise =
     a V.// [(i, v)]
 {-# INLINE updateV #-}
@@ -91,6 +90,12 @@ fromJSONMaybe v = case fromJSON v of
 -- >>> let z = nth 0 .~ Just False $ y
 -- >>> L.unpack $ encode z
 -- "[false,\"hoge\"]"
+--
+-- >>> let v = decode (L.pack "[]") :: Maybe Value
+-- >>> v & nth 0 .~ Just "hello"
+-- Just (Array (fromList [String "hello"]))
+-- >>> v & nth 1 .~ Just "hello"
+-- Just (Array (fromList [Null,String "hello"]))
 
 nth :: (FromJSON v, ToJSON v)
        => Int
