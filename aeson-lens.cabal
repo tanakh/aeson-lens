@@ -1,5 +1,5 @@
 name:                aeson-lens
-version:             0.4.1.0
+version:             0.4.1.1
 synopsis:            Lens of Aeson
 description:         Lens of Aeson
 license:             BSD3
@@ -19,7 +19,7 @@ library
   exposed-modules:     Data.Aeson.Lens
   build-depends:       base >=4.5 && <5
                      , aeson >=0.6
-                     , lens >=3.6
+                     , lens >=3.7
                      , text >=0.11
                      , bytestring >=0.9
                      , vector >=0.9
