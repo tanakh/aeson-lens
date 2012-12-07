@@ -42,7 +42,7 @@ data ValueIx = ArrIx Int | ObjIx T.Text
 valueAt :: (FromJSON u, ToJSON v)
            => ValueIx
            -> IndexedLens ValueIx (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
-valueAt k = index $ \f (fmap toJSON -> v) -> go k v <$> f k (lu k v) where
+valueAt k = indexed $ \f (fmap toJSON -> v) -> go k v <$> f k (lu k v) where
   go (ObjIx ix) (Just (Object o)) Nothing  = Just $ Object $ HMS.delete ix o
   go (ObjIx ix) (Just (Object o)) (Just v) = Just $ Object $ HMS.insert ix (toJSON v) o
   go (ObjIx ix) _                 (Just v) = Just $ Object $ HMS.fromList [(ix, toJSON v)]
@@ -154,7 +154,7 @@ traverseArray = traverseArray'
 -- | Type-changing indexed traversal of an Array
 traverseArray' :: (FromJSON u, ToJSON v)
                => IndexedTraversal Int (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
-traverseArray' = index $ \f m -> case m of
+traverseArray' = indexed $ \f m -> case m of
   Just (Array (map fromJSONMaybe . V.toList -> v)) ->
     Just . Array . V.fromList . map toJSON . catMaybes <$> itraverse f v
   v -> pure v
@@ -173,7 +173,7 @@ traverseObject = traverseObject'
 -- | Type-changing indexed traversal of Object
 traverseObject' :: (FromJSON u, ToJSON v)
                   => IndexedTraversal T.Text (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
-traverseObject' = index $ \f m -> case m of
+traverseObject' = indexed $ \f m -> case m of
   Just (Object (expand . HMS.toList -> v)) ->
     Just . Object . HMS.fromList . catMaybes . collapse <$> withIndex traverseAssocList f v
   v -> pure v
@@ -183,7 +183,7 @@ traverseObject' = index $ \f m -> case m of
 {-# INLINE traverseObject' #-}
 
 traverseAssocList :: IndexedTraversal k [(k, u)] [(k, v)] u v
-traverseAssocList = index $ \f m -> go f m where
+traverseAssocList = indexed $ \f m -> go f m where
   go _ [] = pure []
   go f ((k, v): xs) = (\v' ys -> (k, v') : ys) <$> f k v <*> go f xs
 {-# INLINE traverseAssocList #-}
