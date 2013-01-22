@@ -42,7 +42,7 @@ data ValueIx = ArrIx Int | ObjIx T.Text
 valueAt :: (FromJSON u, ToJSON v)
            => ValueIx
            -> IndexedLens ValueIx (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
-valueAt k = indexed $ \f (fmap toJSON -> v) -> go k v <$> f k (lu k v) where
+valueAt k f (fmap toJSON -> v) = go k v <$> indexed f k (lu k v) where
   go (ObjIx ix) (Just (Object o)) Nothing  = Just $ Object $ HMS.delete ix o
   go (ObjIx ix) (Just (Object o)) (Just v) = Just $ Object $ HMS.insert ix (toJSON v) o
   go (ObjIx ix) _                 (Just v) = Just $ Object $ HMS.fromList [(ix, toJSON v)]
@@ -99,7 +99,7 @@ fromJSONMaybe v = case fromJSON v of
 
 nth :: (FromJSON v, ToJSON v)
        => Int
-       -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
+       -> IndexedLens' ValueIx (Maybe Value) (Maybe v)
 nth = nth'
 {-# INLINE nth #-}
 
@@ -128,7 +128,7 @@ nth' = valueAt . ArrIx
 -- "{\"b\":{\"c\":true},\"a\":2.23}"
 key :: (FromJSON v, ToJSON v)
        => T.Text
-       -> SimpleIndexedLens ValueIx (Maybe Value) (Maybe v)
+       -> IndexedLens' ValueIx (Maybe Value) (Maybe v)
 key = key'
 {-# INLINE key #-}
 
@@ -147,16 +147,16 @@ key' = valueAt . ObjIx
 -- >>> w & catMaybes . toListOf (traverseArray . key (T.pack "name")) :: [T.Text]
 -- ["tanakh","nushio"]
 traverseArray :: (FromJSON v, ToJSON v)
-                 => SimpleIndexedTraversal Int (Maybe Value) (Maybe v)
+                 => IndexedTraversal' Int (Maybe Value) (Maybe v)
 traverseArray = traverseArray'
 {-# INLINE traverseArray #-}
 
 -- | Type-changing indexed traversal of an Array
 traverseArray' :: (FromJSON u, ToJSON v)
                => IndexedTraversal Int (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
-traverseArray' = indexed $ \f m -> case m of
+traverseArray' f m = case m of
   Just (Array (map fromJSONMaybe . V.toList -> v)) ->
-    Just . Array . V.fromList . map toJSON . catMaybes <$> itraverse f v
+    Just . Array . V.fromList . map toJSON . catMaybes <$> itraverse (indexed f) v
   v -> pure v
 {-# INLINE traverseArray' #-}
 
@@ -166,16 +166,16 @@ traverseArray' = indexed $ \f m -> case m of
 -- >>> w & catMaybes . toListOf (traverseArray . traverseObject) :: [Value]
 -- [String "tanakh",Number 29,String "nushio",Number 28]
 traverseObject :: (FromJSON v, ToJSON v)
-                  => SimpleIndexedTraversal T.Text (Maybe Value) (Maybe v)
+                  => IndexedTraversal' T.Text (Maybe Value) (Maybe v)
 traverseObject = traverseObject'
 {-# INLINE traverseObject #-}
 
 -- | Type-changing indexed traversal of Object
 traverseObject' :: (FromJSON u, ToJSON v)
                   => IndexedTraversal T.Text (Maybe Value) (Maybe Value) (Maybe u) (Maybe v)
-traverseObject' = indexed $ \f m -> case m of
+traverseObject' f m = case m of
   Just (Object (expand . HMS.toList -> v)) ->
-    Just . Object . HMS.fromList . catMaybes . collapse <$> withIndex traverseAssocList f v
+    Just . Object . HMS.fromList . catMaybes . collapse <$> traverseAssocList f v
   v -> pure v
   where
   expand = map (_2 %~ fromJSONMaybe)
@@ -183,7 +183,7 @@ traverseObject' = indexed $ \f m -> case m of
 {-# INLINE traverseObject' #-}
 
 traverseAssocList :: IndexedTraversal k [(k, u)] [(k, v)] u v
-traverseAssocList = indexed $ \f m -> go f m where
+traverseAssocList f m = go (indexed f) m where
   go _ [] = pure []
   go f ((k, v): xs) = (\v' ys -> (k, v') : ys) <$> f k v <*> go f xs
 {-# INLINE traverseAssocList #-}
@@ -197,7 +197,7 @@ traverseAssocList = indexed $ \f m -> go f m where
 -- Nothing
 -- >>> v ^. key (T.pack "hoge") . asDouble
 -- Nothing
-asDouble :: SimpleLens (Maybe Value) (Maybe Double)
+asDouble :: Lens' (Maybe Value) (Maybe Double)
 asDouble = as
 {-# INLINE asDouble #-}
 
@@ -210,7 +210,7 @@ asDouble = as
 -- Nothing
 -- >>> v ^. key (T.pack "hoge") . asText
 -- Nothing
-asText :: SimpleLens (Maybe Value) (Maybe T.Text)
+asText :: Lens' (Maybe Value) (Maybe T.Text)
 asText = as
 {-# INLINE asText #-}
 
@@ -223,12 +223,12 @@ asText = as
 -- Nothing
 -- >>> v ^. key (T.pack "hoge") . asBool
 -- Nothing
-asBool :: SimpleLens (Maybe Value) (Maybe Bool)
+asBool :: Lens' (Maybe Value) (Maybe Bool)
 asBool = as
 {-# INLINE asBool #-}
 
 as :: (ToJSON v, FromJSON v)
-      => SimpleLens (Maybe Value) (Maybe v)
+      => Lens' (Maybe Value) (Maybe v)
 as f x = toJSON <$$> f (fromJSONMaybe =<< x)
   where
   (<$$>) = fmap . fmap
