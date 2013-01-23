@@ -19,7 +19,7 @@ library
   exposed-modules:     Data.Aeson.Lens
   build-depends:       base >=4.5 && <5
                      , aeson >=0.6
-                     , lens >=3.7
+                     , lens >=3.8
                      , text >=0.11
                      , bytestring >=0.9
                      , vector >=0.9
